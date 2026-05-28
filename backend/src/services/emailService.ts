@@ -1,21 +1,35 @@
 import nodemailer from 'nodemailer';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 let transporter: nodemailer.Transporter | null = null;
 
 function getSmtpSettings() {
-  const host = process.env.SMTP_HOST?.trim();
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
+  const host = process.env.SMTP_HOST?.trim() || 'smtp.gmail.com';
+
+  const user = process.env.SMTP_USER?.trim() || '';
+
+  const pass = process.env.SMTP_PASS?.trim() || '';
+
   const port = Number(process.env.SMTP_PORT || 587);
+
   const from =
     process.env.SMTP_FROM?.trim() ||
-    (user ? `AssessAI <${user}>` : 'AssessAI <noreply@assessai.local>');
+    (user
+      ? `AssessAI <${user}>`
+      : 'AssessAI <noreply@assessai.local>');
 
-  return { host, user, pass, port, from };
+  return {
+    host,
+    user,
+    pass,
+    port,
+    from,
+  };
 }
 
 export function isSmtpConfigured(): boolean {
   const { host, user, pass } = getSmtpSettings();
+
   return Boolean(host && user && pass);
 }
 
@@ -27,16 +41,17 @@ function getTransporter(): nodemailer.Transporter | null {
   const { host, user, pass, port } = getSmtpSettings();
 
   if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: host!,
+    const transportOptions: SMTPTransport.Options = {
+      host,
       port,
-      secure: port === 465,
-      requireTLS: port === 587,
+      secure: false,
       auth: {
-        user: user!,
-        pass: pass!,
+        user,
+        pass,
       },
-    });
+    };
+
+    transporter = nodemailer.createTransport(transportOptions);
   }
 
   return transporter;
@@ -44,9 +59,13 @@ function getTransporter(): nodemailer.Transporter | null {
 
 export async function verifySmtpConnection(): Promise<void> {
   const mailer = getTransporter();
+
   if (!mailer) {
-    throw new Error('SMTP is not configured (SMTP_HOST, SMTP_USER, SMTP_PASS)');
+    throw new Error(
+      'SMTP is not configured (SMTP_HOST, SMTP_USER, SMTP_PASS)'
+    );
   }
+
   await mailer.verify();
 }
 
@@ -68,21 +87,50 @@ export async function sendOtpEmail(
   const html = `
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
       <h2 style="color:#FF4D00">AssessAI</h2>
-      <p>${purpose === 'signup' ? 'Use this code to verify your account:' : 'Use this code to reset your password:'}</p>
-      <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#1a1a1a">${otp}</p>
-      <p style="color:#666;font-size:14px">Expires in 10 minutes.</p>
+
+      <p>
+        ${
+          purpose === 'signup'
+            ? 'Use this code to verify your account:'
+            : 'Use this code to reset your password:'
+        }
+      </p>
+
+      <p
+        style="
+          font-size:32px;
+          font-weight:bold;
+          letter-spacing:8px;
+          color:#1a1a1a;
+        "
+      >
+        ${otp}
+      </p>
+
+      <p style="color:#666;font-size:14px">
+        Expires in 10 minutes.
+      </p>
     </div>
   `;
 
   const mailer = getTransporter();
+
   const { from } = getSmtpSettings();
 
+  // Fallback when SMTP not configured
   if (!mailer) {
-    console.log('\n========== AssessAI OTP (dev — no SMTP configured) ==========');
+    console.log(
+      '\n========== AssessAI OTP (dev — no SMTP configured) =========='
+    );
+
     console.log(`To: ${to}`);
     console.log(`Purpose: ${purpose}`);
     console.log(`OTP: ${otp}`);
-    console.log('============================================================\n');
+
+    console.log(
+      '============================================================\n'
+    );
+
     return;
   }
 
@@ -94,11 +142,18 @@ export async function sendOtpEmail(
       text,
       html,
     });
-    console.log(`✓ OTP email sent to ${to} (messageId: ${info.messageId})`);
+
+    console.log(
+      `✓ OTP email sent to ${to} (messageId: ${info.messageId})`
+    );
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : 'Unknown SMTP error';
+      error instanceof Error
+        ? error.message
+        : 'Unknown SMTP error';
+
     console.error('✗ Failed to send OTP email:', message);
+
     throw new Error(
       `Could not send verification email. Check SMTP settings. ${message}`
     );
