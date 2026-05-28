@@ -7,39 +7,53 @@ import path from 'path';
 import { connectDB, disconnectDB } from './config/database';
 import { connectRedis, disconnectRedis } from './config/redis';
 import { initializeQueues } from './config/queue';
-import { startQuestionGenerationWorker, startPDFGenerationWorker } from './jobs/workers';
+import {
+  startQuestionGenerationWorker,
+  startPDFGenerationWorker,
+} from './jobs/workers';
 import { initWebSocket } from './websocket/handler';
 import { errorHandler } from './middleware/errorHandler';
 import assignmentRoutes from './routes/assignments';
 import authRoutes from './routes/auth';
-import { verifySmtpConnection, isSmtpConfigured } from './services/emailService';
+import {
+  verifySmtpConnection,
+  isSmtpConfigured,
+} from './services/emailService';
 
 const app: Express = express();
-const port = process.env.PORT || 3001;
 
-const configuredOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+const PORT = process.env.PORT || 3001;
+
+const configuredOrigins = (
+  process.env.FRONTEND_URL || 'http://localhost:3000'
+)
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
 const isAllowedOrigin = (origin: string | undefined): boolean => {
   if (!origin) return true;
+
   if (configuredOrigins.includes(origin)) return true;
+
   if (
     process.env.NODE_ENV !== 'production' &&
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
   ) {
     return true;
   }
+
   return false;
 };
 
-// Middleware — allow frontend (different port) to load /uploads images in <img>
+// Security middleware
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
+
+// CORS
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -52,38 +66,56 @@ app.use(
     credentials: true,
   })
 );
+
+// Body parser
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Static uploads
 app.use(
   '/uploads',
   (req: Request, res: Response, next: Function) => {
     const origin = req.headers.origin;
+
     if (origin && isAllowedOrigin(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
     }
+
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
     next();
   },
   express.static(path.join(process.cwd(), 'uploads'))
 );
 
-// Request logging
+// Request logger
 app.use((req: Request, res: Response, next: Function) => {
   console.log(`${req.method} ${req.path}`);
   next();
 });
 
-// API Routes
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', assignmentRoutes);
 
-// Health check
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Root route
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'AssessAI Backend is running successfully 🚀',
+  });
 });
 
-// 404 handler
+// Health route
+app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 404 route
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     error: 'Route not found',
@@ -91,19 +123,20 @@ app.use((req: Request, res: Response) => {
   });
 });
 
-// Error handler (must be last)
+// Error handler
 app.use(errorHandler);
 
-// Create HTTP server for WebSocket
+// HTTP server
 const server = http.createServer(app);
 
-// Initialize services
+// Start server
 const startServer = async () => {
   try {
-    // Connect to databases
+    // Database connections
     await connectDB();
     await connectRedis();
 
+    // SMTP
     if (isSmtpConfigured()) {
       try {
         await verifySmtpConnection();
@@ -116,27 +149,29 @@ const startServer = async () => {
       }
     } else {
       console.warn(
-        '⚠ SMTP not set — OTP codes print in this terminal only (see backend console)'
+        '⚠ SMTP not set — OTP codes print in backend console only'
       );
     }
-    
-    // Initialize queues
+
+    // BullMQ
     await initializeQueues();
 
-    // Start workers
+    // Workers
     startQuestionGenerationWorker();
     startPDFGenerationWorker();
 
-    // Initialize WebSocket
+    // WebSocket
     initWebSocket(server);
 
-    // Start server
-    server.listen(port, () => {
-      console.log(`✓ Server running on http://localhost:${port}`);
-      console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+    // Start listening
+    server.listen(PORT, () => {
+      console.log(`✓ Server running on port ${PORT}`);
+      console.log(
+        `✓ Environment: ${process.env.NODE_ENV || 'development'}`
+      );
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 };
@@ -144,15 +179,19 @@ const startServer = async () => {
 // Graceful shutdown
 const shutdown = async () => {
   console.log('Shutting down gracefully...');
+
   server.close();
+
   await disconnectDB();
   await disconnectRedis();
+
   process.exit(0);
 };
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
+// Start app
 startServer();
 
 export default app;
