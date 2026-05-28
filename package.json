@@ -10,5 +10,8 @@
     "dev:frontend": "npm run dev --prefix frontend",
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
     "demo": "node scripts/demo.mjs"
+  },
+  "dependencies": {
+    "resend": "^6.12.4"
   }
 }

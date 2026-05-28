@@ -1,64 +1,13 @@
-import nodemailer from 'nodemailer';
-import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { Resend } from 'resend';
 
-let transporter: nodemailer.Transporter | null = null;
-
-function getSmtpSettings() {
-  const user = process.env.SMTP_USER?.trim() || '';
-
-  const pass = process.env.SMTP_PASS?.trim() || '';
-
-  const from =
-    process.env.SMTP_FROM?.trim() ||
-    (user
-      ? `AssessAI <${user}>`
-      : 'AssessAI <noreply@assessai.local>');
-
-  return {
-    user,
-    pass,
-    from,
-  };
-}
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export function isSmtpConfigured(): boolean {
-  const { user, pass } = getSmtpSettings();
-
-  return Boolean(user && pass);
-}
-
-function getTransporter(): nodemailer.Transporter | null {
-  if (!isSmtpConfigured()) {
-    return null;
-  }
-
-  const { user, pass } = getSmtpSettings();
-
-  if (!transporter) {
-    const transportOptions: SMTPTransport.Options = {
-      service: 'gmail',
-      auth: {
-        user,
-        pass,
-      },
-    };
-
-    transporter = nodemailer.createTransport(transportOptions);
-  }
-
-  return transporter;
+  return Boolean(process.env.RESEND_API_KEY);
 }
 
 export async function verifySmtpConnection(): Promise<void> {
-  const mailer = getTransporter();
-
-  if (!mailer) {
-    throw new Error(
-      'SMTP is not configured (SMTP_USER, SMTP_PASS)'
-    );
-  }
-
-  await mailer.verify();
+  return;
 }
 
 export async function sendOtpEmail(
@@ -105,14 +54,9 @@ export async function sendOtpEmail(
     </div>
   `;
 
-  const mailer = getTransporter();
-
-  const { from } = getSmtpSettings();
-
-  // Fallback when SMTP not configured
-  if (!mailer) {
+  if (!process.env.RESEND_API_KEY) {
     console.log(
-      '\n========== AssessAI OTP (dev — no SMTP configured) =========='
+      '\n========== AssessAI OTP (dev — no email provider configured) =========='
     );
 
     console.log(`To: ${to}`);
@@ -127,27 +71,20 @@ export async function sendOtpEmail(
   }
 
   try {
-    const info = await mailer.sendMail({
-      from,
+    await resend.emails.send({
+      from: 'AssessAI <onboarding@resend.dev>',
       to,
       subject,
       text,
       html,
     });
 
-    console.log(
-      `✓ OTP email sent to ${to} (messageId: ${info.messageId})`
-    );
+    console.log(`✓ OTP email sent to ${to}`);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown SMTP error';
-
-    console.error('✗ Failed to send OTP email:', message);
+    console.error('✗ Failed to send OTP email:', error);
 
     throw new Error(
-      `Could not send verification email. Check SMTP settings. ${message}`
+      'Could not send verification email'
     );
   }
 }
