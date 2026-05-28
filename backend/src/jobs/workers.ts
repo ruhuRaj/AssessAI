@@ -7,8 +7,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const redisConnection = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+  url: process.env.REDIS_URL,
 };
 
 const aiService = new AIService();
@@ -87,7 +86,7 @@ export const startPDFGenerationWorker = () => {
       console.log(`Processing PDF job ${job.id}:`, job.data);
 
       try {
-        const { paperId, metadata } = job.data;
+        const { paperId } = job.data;
 
         // Retrieve paper data
         const paper = await QuestionPaper.findById(paperId);
@@ -96,8 +95,7 @@ export const startPDFGenerationWorker = () => {
           throw new Error(`Paper ${paperId} not found`);
         }
 
-        // PDF generation would happen here
-        // For now, just mark as completed
+        // PDF generation logic here
         await job.updateProgress(100);
 
         return {
