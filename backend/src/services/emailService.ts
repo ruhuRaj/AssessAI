@@ -1,13 +1,22 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 export function isSmtpConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY);
+  return Boolean(
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS
+  );
 }
 
 export async function verifySmtpConnection(): Promise<void> {
-  return;
+  await transporter.verify();
 }
 
 export async function sendOtpEmail(
@@ -54,37 +63,28 @@ export async function sendOtpEmail(
     </div>
   `;
 
-  if (!process.env.RESEND_API_KEY) {
-    console.log(
-      '\n========== AssessAI OTP (dev — no email provider configured) =========='
-    );
-
-    console.log(`To: ${to}`);
-    console.log(`Purpose: ${purpose}`);
-    console.log(`OTP: ${otp}`);
-
-    console.log(
-      '============================================================\n'
-    );
-
-    return;
-  }
-
   try {
-    await resend.emails.send({
-      from: 'AssessAI <onboarding@resend.dev>',
+    const info = await transporter.sendMail({
+      from: process.env.SMTP_USER,
       to,
       subject,
       text,
       html,
     });
 
-    console.log(`✓ OTP email sent to ${to}`);
+    console.log(
+      `✓ OTP email sent to ${to} (messageId: ${info.messageId})`
+    );
   } catch (error) {
-    console.error('✗ Failed to send OTP email:', error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unknown SMTP error';
+
+    console.error('✗ Failed to send OTP email:', message);
 
     throw new Error(
-      'Could not send verification email'
+      `Could not send verification email. ${message}`
     );
   }
 }
