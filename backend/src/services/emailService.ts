@@ -1,12 +1,22 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Force IPv4 — Render free tier cannot reach SMTP over IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  port: 587,          // ← was 465; 587 (STARTTLS) works on Render
+  secure: false,      // ← was true; must be false for port 587
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
+  },
+  connectionTimeout: 10_000,
+  greetingTimeout:   10_000,
+  socketTimeout:     15_000,
+  tls: {
+    rejectUnauthorized: false,  // avoids TLS errors on restricted networks
   },
 });
 
@@ -39,29 +49,15 @@ export async function sendOtpEmail(
   const html = `
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
       <h2 style="color:#FF4D00">AssessAI</h2>
-
       <p>
-        ${
-          purpose === 'signup'
-            ? 'Use this code to verify your account:'
-            : 'Use this code to reset your password:'
-        }
+        ${purpose === 'signup'
+          ? 'Use this code to verify your account:'
+          : 'Use this code to reset your password:'}
       </p>
-
-      <p
-        style="
-          font-size:32px;
-          font-weight:bold;
-          letter-spacing:8px;
-          color:#1a1a1a;
-        "
-      >
+      <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#1a1a1a">
         ${otp}
       </p>
-
-      <p style="color:#666;font-size:14px">
-        Expires in 10 minutes.
-      </p>
+      <p style="color:#666;font-size:14px">Expires in 10 minutes.</p>
     </div>
   `;
 
@@ -73,20 +69,10 @@ export async function sendOtpEmail(
       text,
       html,
     });
-
-    console.log(
-      `✓ OTP email sent to ${to} (messageId: ${info.messageId})`
-    );
+    console.log(`✓ OTP email sent to ${to} (messageId: ${info.messageId})`);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unknown SMTP error';
-
+    const message = error instanceof Error ? error.message : 'Unknown SMTP error';
     console.error('✗ Failed to send OTP email:', message);
-
-    throw new Error(
-      `Could not send verification email. ${message}`
-    );
+    throw new Error(`Could not send verification email. ${message}`);
   }
 }
