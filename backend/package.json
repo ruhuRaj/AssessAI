@@ -26,7 +26,7 @@
     "nodemailer": "^8.0.8",
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.13.0",
-    "redis": "^4.6.11",
+    "redis": "^5.0.0",
     "typescript": "^5.2.2",
     "uuid": "^9.0.1",
     "ws": "^8.14.2"
