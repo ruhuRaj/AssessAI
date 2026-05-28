@@ -4,13 +4,9 @@ import SMTPTransport from 'nodemailer/lib/smtp-transport';
 let transporter: nodemailer.Transporter | null = null;
 
 function getSmtpSettings() {
-  const host = process.env.SMTP_HOST?.trim() || 'smtp.gmail.com';
-
   const user = process.env.SMTP_USER?.trim() || '';
 
   const pass = process.env.SMTP_PASS?.trim() || '';
-
-  const port = Number(process.env.SMTP_PORT || 587);
 
   const from =
     process.env.SMTP_FROM?.trim() ||
@@ -19,18 +15,16 @@ function getSmtpSettings() {
       : 'AssessAI <noreply@assessai.local>');
 
   return {
-    host,
     user,
     pass,
-    port,
     from,
   };
 }
 
 export function isSmtpConfigured(): boolean {
-  const { host, user, pass } = getSmtpSettings();
+  const { user, pass } = getSmtpSettings();
 
-  return Boolean(host && user && pass);
+  return Boolean(user && pass);
 }
 
 function getTransporter(): nodemailer.Transporter | null {
@@ -38,13 +32,11 @@ function getTransporter(): nodemailer.Transporter | null {
     return null;
   }
 
-  const { host, user, pass, port } = getSmtpSettings();
+  const { user, pass } = getSmtpSettings();
 
   if (!transporter) {
     const transportOptions: SMTPTransport.Options = {
-      host,
-      port,
-      secure: false,
+      service: 'gmail',
       auth: {
         user,
         pass,
@@ -62,7 +54,7 @@ export async function verifySmtpConnection(): Promise<void> {
 
   if (!mailer) {
     throw new Error(
-      'SMTP is not configured (SMTP_HOST, SMTP_USER, SMTP_PASS)'
+      'SMTP is not configured (SMTP_USER, SMTP_PASS)'
     );
   }
 
