@@ -1,23 +1,19 @@
 import nodemailer from 'nodemailer';
 import dns from 'dns';
 
-// Force IPv4 — Render free tier cannot reach SMTP over IPv6
 dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,          // ← was 465; 587 (STARTTLS) works on Render
-  secure: false,      // ← was true; must be false for port 587
+  host: 'smtp-relay.brevo.com',  // ← Brevo SMTP
+  port: 587,
+  secure: false,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: process.env.SMTP_USER,  // acd2cc001@smtp-brevo.com
+    pass: process.env.SMTP_PASS,  // your generated SMTP key
   },
   connectionTimeout: 10_000,
   greetingTimeout:   10_000,
   socketTimeout:     15_000,
-  tls: {
-    rejectUnauthorized: false,  // avoids TLS errors on restricted networks
-  },
 });
 
 export function isSmtpConfigured(): boolean {
@@ -63,7 +59,7 @@ export async function sendOtpEmail(
 
   try {
     const info = await transporter.sendMail({
-      from: process.env.SMTP_USER,
+      from: `"AssessAI" <${process.env.SMTP_USER}>`,
       to,
       subject,
       text,
