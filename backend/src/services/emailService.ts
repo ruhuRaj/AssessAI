@@ -1,0 +1,106 @@
+import nodemailer from 'nodemailer';
+
+let transporter: nodemailer.Transporter | null = null;
+
+function getSmtpSettings() {
+  const host = process.env.SMTP_HOST?.trim();
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const from =
+    process.env.SMTP_FROM?.trim() ||
+    (user ? `AssessAI <${user}>` : 'AssessAI <noreply@assessai.local>');
+
+  return { host, user, pass, port, from };
+}
+
+export function isSmtpConfigured(): boolean {
+  const { host, user, pass } = getSmtpSettings();
+  return Boolean(host && user && pass);
+}
+
+function getTransporter(): nodemailer.Transporter | null {
+  if (!isSmtpConfigured()) {
+    return null;
+  }
+
+  const { host, user, pass, port } = getSmtpSettings();
+
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: host!,
+      port,
+      secure: port === 465,
+      requireTLS: port === 587,
+      auth: {
+        user: user!,
+        pass: pass!,
+      },
+    });
+  }
+
+  return transporter;
+}
+
+export async function verifySmtpConnection(): Promise<void> {
+  const mailer = getTransporter();
+  if (!mailer) {
+    throw new Error('SMTP is not configured (SMTP_HOST, SMTP_USER, SMTP_PASS)');
+  }
+  await mailer.verify();
+}
+
+export async function sendOtpEmail(
+  to: string,
+  otp: string,
+  purpose: 'signup' | 'password_reset'
+): Promise<void> {
+  const subject =
+    purpose === 'signup'
+      ? 'Verify your AssessAI account'
+      : 'Reset your AssessAI password';
+
+  const text =
+    purpose === 'signup'
+      ? `Your AssessAI verification code is: ${otp}\n\nThis code expires in 10 minutes.`
+      : `Your AssessAI password reset code is: ${otp}\n\nThis code expires in 10 minutes. If you did not request this, ignore this email.`;
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+      <h2 style="color:#FF4D00">AssessAI</h2>
+      <p>${purpose === 'signup' ? 'Use this code to verify your account:' : 'Use this code to reset your password:'}</p>
+      <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#1a1a1a">${otp}</p>
+      <p style="color:#666;font-size:14px">Expires in 10 minutes.</p>
+    </div>
+  `;
+
+  const mailer = getTransporter();
+  const { from } = getSmtpSettings();
+
+  if (!mailer) {
+    console.log('\n========== AssessAI OTP (dev — no SMTP configured) ==========');
+    console.log(`To: ${to}`);
+    console.log(`Purpose: ${purpose}`);
+    console.log(`OTP: ${otp}`);
+    console.log('============================================================\n');
+    return;
+  }
+
+  try {
+    const info = await mailer.sendMail({
+      from,
+      to,
+      subject,
+      text,
+      html,
+    });
+    console.log(`✓ OTP email sent to ${to} (messageId: ${info.messageId})`);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown SMTP error';
+    console.error('✗ Failed to send OTP email:', message);
+    throw new Error(
+      `Could not send verification email. Check SMTP settings. ${message}`
+    );
+  }
+}

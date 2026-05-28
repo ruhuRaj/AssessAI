@@ -1,0 +1,14 @@
+{
+  "name": "veda-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AssessAI - AI Assessment Creator",
+  "scripts": {
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "demo": "node scripts/demo.mjs"
+  }
+}
